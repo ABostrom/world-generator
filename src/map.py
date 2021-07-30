@@ -73,28 +73,35 @@ def voronoi_polygons_2D(vor, return_ridges=False):
 
 class Cell:
 
-    def __init__(self, pt,vert, region, region_verts) -> None:
+    def __init__(self, pt,vert, region, region_verts, neighbours) -> None:
         self.pt = pt
-        self.vert = vert
+        self.vert = np.asarray(vert)
         self.region = region
         self.region_verts = region_verts
+        self.neighbours = neighbours
 
 
 class Map:
 
     def __init__(self, width, height, points, voronoi, delaunay) -> None:
-        self.pts = points
+        
+        self.points = voronoi.points
         self.vor = voronoi
         self.tri = delaunay
         self.width = width
         self.height = height
         self.regions = voronoi.regions
         self.vertices = voronoi.vertices
-        
-        self.cells = [Cell(pt, points[pt], region, self.vertices[region]) for pt, region in enumerate(self.regions) if -1 not in region]
+
+        connections = defaultdict(list)
+        #calculate neighbours
+        for pt1, pt2 in voronoi.ridge_points:
+            connections[pt1].append(pt2)
+            connections[pt2].append(pt1)
+
+        self.cells = {pt: Cell(pt, self.points[pt], voronoi.regions[index], self.vertices[voronoi.regions[index]], connections[pt]) for pt, index in enumerate(voronoi.point_region) if -1 not in voronoi.regions[index]}
         self.num_cells = len(self.cells)
         self.elevation = np.random.uniform(low=0.0, high=5.0, size=self.num_cells)
-
 
     def compute_line_segments(self):
         vor = self.vor
@@ -136,10 +143,20 @@ class Map:
         ax = fig.add_subplot(1,1,1)
 
         #plot the points
-        ax.plot(self.pts[:,0], self.pts[:,1], 'o')
-        
-        for i, cell in enumerate(self.cells):
+
+        for i, (pt, cell) in enumerate(self.cells.items()):
+            ax.text(*cell.vert, str(cell.pt), color='white')
             ax.fill(*zip(*cell.region_verts), color=color.to_rgba(data[i]))
+
+            for neighbour in cell.neighbours:
+                if self.cells.__contains__(neighbour):
+                    #TODO:
+                    #find the line segment for the boundary. 
+                    #find the midpoint.
+                    #get the normal. 
+                    #come out from the normal by 0.25
+                    dir = (self.cells[neighbour].vert - cell.vert) * 0.25
+                    ax.text(*(cell.vert + dir), str(self.cells[neighbour].pt))
 
         plt.xlim(self.vor.min_bound[0] - 0.1, self.vor.max_bound[0] + 0.1)
         plt.ylim(self.vor.min_bound[1] - 0.1, self.vor.max_bound[1] + 0.1)

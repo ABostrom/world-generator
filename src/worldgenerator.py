@@ -41,8 +41,8 @@ def inside_bounds(pt):
     print(pt)
 
 
-width = 100
-height = 100
+width = 50
+height = 50
 points = create_points(width, height, 4)
 
 
