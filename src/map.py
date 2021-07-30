@@ -74,10 +74,10 @@ def voronoi_polygons_2D(vor, return_ridges=False):
 class Cell:
 
     def __init__(self, pt,vert, region, region_verts, neighbours) -> None:
-        self.pt = pt
-        self.vert = np.asarray(vert)
+        self.index = pt
+        self.centre = np.asarray(vert)
         self.region = region
-        self.region_verts = region_verts
+        self.corners = region_verts
         self.neighbours = neighbours
 
 
@@ -145,8 +145,8 @@ class Map:
         #plot the points
 
         for i, (pt, cell) in enumerate(self.cells.items()):
-            ax.text(*cell.vert, str(cell.pt), color='white')
-            ax.fill(*zip(*cell.region_verts), color=color.to_rgba(data[i]))
+            ax.text(*cell.centre, str(cell.index), color='white')
+            ax.fill(*zip(*cell.corners), color=color.to_rgba(data[i]))
 
             for neighbour in cell.neighbours:
                 if self.cells.__contains__(neighbour):
@@ -155,8 +155,8 @@ class Map:
                     #find the midpoint.
                     #get the normal. 
                     #come out from the normal by 0.25
-                    dir = (self.cells[neighbour].vert - cell.vert) * 0.25
-                    ax.text(*(cell.vert + dir), str(self.cells[neighbour].pt))
+                    dir = (self.cells[neighbour].centre - cell.centre) * 0.25
+                    ax.text(*(cell.centre + dir), str(self.cells[neighbour].index))
 
         plt.xlim(self.vor.min_bound[0] - 0.1, self.vor.max_bound[0] + 0.1)
         plt.ylim(self.vor.min_bound[1] - 0.1, self.vor.max_bound[1] + 0.1)

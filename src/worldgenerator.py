@@ -45,8 +45,6 @@ width = 50
 height = 50
 points = create_points(width, height, 4)
 
-
-print(points)
 #voronoi = Voronoi(points, qhull_options='Qbb Qc Qz')
 voronoi = loyds_algorithm(points, 1)
 delaunay = Delaunay(points)
