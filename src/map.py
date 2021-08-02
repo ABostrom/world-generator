@@ -1,3 +1,4 @@
+import enum
 from matplotlib.collections import LineCollection, PolyCollection
 from scipy.spatial import Voronoi, Delaunay, voronoi_plot_2d, delaunay_plot_2d
 import matplotlib.pyplot as plt
@@ -76,9 +77,41 @@ class Cell:
     def __init__(self, pt,vert, region, region_verts, neighbours) -> None:
         self.index = pt
         self.centre = np.asarray(vert)
-        self.region = region
-        self.corners = region_verts
+        self.region = region        #this is an 
+        self.corners = region_verts #this is an index into the Corners array.
         self.neighbours = neighbours
+
+        #setup the borders and the corners
+
+    def __repr__(self):
+        return f'index:{self.index}'
+
+#TODO: This class contains the Edge data
+# Should have the Edge index
+# The Two indexes for the verts
+# The vert data
+# The two polygons that it borders
+class Edge:
+    
+    def __init__(self, v0, v1, d0, d1) -> None:
+        
+        self.v0 = np.asarray(v0)
+        self.v1 = np.asarray(v1)
+        self.d0 = d0
+        self.d1 = d1
+        
+
+#TODO: This class contains the corner data.
+# Should have the corners index.
+# Should have the edges it connects too
+# Should have the polygons that it meets
+class Corner:
+    
+    def __init__(self, vert, touches, protrudes, adjecent) -> None:
+        self.vert = vert
+        self.touches = touches # polygons this corner touches
+        self.protrudes = protrudes #edges touching the corner
+        self.adjacent = adjecent #corners adjacent to this one.
 
 
 class Map:
@@ -94,14 +127,56 @@ class Map:
         self.vertices = voronoi.vertices
 
         connections = defaultdict(list)
-        #calculate neighbours
+        #calculate polygon neighbours
         for pt1, pt2 in voronoi.ridge_points:
             connections[pt1].append(pt2)
             connections[pt2].append(pt1)
 
+
+        # create the cell graph.
+
+        #TODO: self.vertices should be corners.
         self.cells = {pt: Cell(pt, self.points[pt], voronoi.regions[index], self.vertices[voronoi.regions[index]], connections[pt]) for pt, index in enumerate(voronoi.point_region) if -1 not in voronoi.regions[index]}
         self.num_cells = len(self.cells)
-        self.elevation = np.random.uniform(low=0.0, high=5.0, size=self.num_cells)
+        self.elevation = np.random.normal(size=self.num_cells)
+
+        print(self.cells)
+        print(voronoi.ridge_vertices)
+
+
+        #TODO: given a vert (index), get the cells
+        #TODO: given a vert (index), get the edges
+        vert_polys = defaultdict(set)
+        vert_edges = defaultdict(list)
+        vert_connections = defaultdict(set)
+
+        # build set of polys for each vertex
+        for (p1, p2), (v0, v1) in zip(voronoi.ridge_points, voronoi.ridge_vertices):
+            #skip -1 indices  
+            if -1  in (v0, v1):
+                continue
+
+            #given a vert index get the set of polys we're connected too.
+            vert_polys[v0].update((p1, p2))
+            vert_polys[v1].update((p1, p2))
+            #poly pairs that we can use to index into the edges dictionary.
+            vert_edges[v0].append((p1, p2))
+            vert_edges[v1].append((p1, p2))
+            #verts connected to this one.
+            vert_connections[v0].add(v1)
+            vert_connections[v1].add(v0)
+
+        self.corners = [Corner(vert, vert_polys[i], vert_edges[i], vert_connections[i]) for i, vert in enumerate(voronoi.vertices)]
+
+        #Data structure: given two poly indexes, get the edge
+        #this will contain each edge, and the cells it bisects, the cells that touch one end of the corner, and the other.
+        #given a pair of polygons, get the corresponding edge.
+        #IE two adjacent poly's should contain a shared pair of vertices
+        self.edges = {(p1, p2): Edge(self.vertices[v0], self.vertices[v1], self.cells.get(p1, None), self.cells.get(p2, None)) 
+                        for (p1, p2), (v0, v1) in zip(voronoi.ridge_points, voronoi.ridge_vertices)
+                        if -1  not in (v0, v1)}
+
+        
 
     def compute_line_segments(self):
         vor = self.vor
@@ -138,34 +213,78 @@ class Map:
 
 
 
-    def draw(self, data, color):
+    def draw(self, data, color, neighbours=False, show_text=False, corner_connection=20):
         fig = plt.figure()
         ax = fig.add_subplot(1,1,1)
 
-        #plot the points
+        # for i, pt in enumerate(self.points):
+        #     if self.cells.__contains__(i):
+        #         ax.text(*(pt + (np.ones(2) / 4)), str(i), color = 'red')
 
+        #plot the cells
         for i, (pt, cell) in enumerate(self.cells.items()):
-            ax.text(*cell.centre, str(cell.index), color='white')
+            if show_text:
+                ax.text(*cell.centre, str(cell.index), color='white')
+
             ax.fill(*zip(*cell.corners), color=color.to_rgba(data[i]))
 
-            for neighbour in cell.neighbours:
-                if self.cells.__contains__(neighbour):
-                    #TODO:
-                    #find the line segment for the boundary. 
-                    #find the midpoint.
-                    #get the normal. 
-                    #come out from the normal by 0.25
-                    dir = (self.cells[neighbour].centre - cell.centre) * 0.25
-                    ax.text(*(cell.centre + dir), str(self.cells[neighbour].index))
+            if neighbours:
+                for neighbour in cell.neighbours:
+                    if self.cells.__contains__(neighbour):
+                        #TODO:
+                        #find the line segment for the boundary. 
+                        #find the midpoint.
+                        #get the normal. 
+                        #come out from the normal by 0.25
+                        dir = (self.cells[neighbour].centre - cell.centre) * 0.25
+                        if show_text:
+                            ax.text(*(cell.centre + dir), str(self.cells[neighbour].index))
 
-        plt.xlim(self.vor.min_bound[0] - 0.1, self.vor.max_bound[0] + 0.1)
-        plt.ylim(self.vor.min_bound[1] - 0.1, self.vor.max_bound[1] + 0.1)
+        for (p1, p2), edge in self.edges.items():
+            mid = (edge.v0 + edge.v1) / 2
+            ax.plot([edge.v0[0], edge.v1[0]], [edge.v0[1], edge.v1[1]], marker = 'o', color='black')
+            #TODO: could normalise direction vector to make more consistent
+            if show_text:
+                ax.text(*(mid + ((self.cells[p1].centre - mid)*0.25)), str(self.cells[p1].index)) 
+                ax.text(*(mid + ((self.cells[p2].centre - mid)*0.25)), str(self.cells[p2].index)) 
+
+
+        #draw a specific corner, and it's associated connectivity.
+
+        
+        if corner_connection >= 0:
+            #get all the corners from the cells.
+            for cor in self.cells[corner_connection].region:
+                corner = self.corners[cor]
+                
+                print(corner.vert)
+                ax.plot(*corner.vert, marker = 'x', color='green')
+
+                #draw connected edges.
+                for e in corner.protrudes:
+                    if self.edges.__contains__(e):
+                        edge = self.edges[e]
+                        ax.plot([edge.v0[0], edge.v1[0]], [edge.v0[1], edge.v1[1]], marker = 'o', color='red')
+
+                #draw adjacent corners.
+                for c in corner.adjacent:
+                    ax.plot(*self.corners[c].vert, marker = 'x', color='green')
+
+                
+                for p in corner.touches:
+                    if self.cells.__contains__(p):
+                        ax.plot(*self.cells[p].centre, *corner.vert, marker='v', color='cyan')
+
+        
+
+        plt.xlim(self.vor.min_bound[0] - 0.1, self.vor.max_bound[0] - 0.1)
+        plt.ylim(self.vor.min_bound[1] - 0.1, self.vor.max_bound[1] - 0.1)
 
         fig.show()
 
 
-    def draw_land(self):
-        self.draw(self.elevation, self.generate_colours(self.elevation, cm.terrain))
+    def draw_land(self, **kwargs):
+        self.draw(self.elevation, self.generate_colours(self.elevation, cm.terrain), kwargs)
 
     def calculate_point(self, points, verts, pointidx, simplex, center, ptp_bound, furthest_site):
         i = simplex[simplex >= 0][0]  # finite end Voronoi vertex

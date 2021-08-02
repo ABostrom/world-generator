@@ -10,7 +10,7 @@ import numpy as np
 
 def create_points(width, height, spacing):
     radius = int(spacing / 2)
-    return np.array([j_point(x, y, radius) for y in range(0, height, spacing) for x in range(0, width, spacing)])
+    return np.array([j_point(x, y, radius) for y in range(0, height+1, spacing) for x in range(0, width+1, spacing)])
 
 def j_point(x, y, radius):
     return [j_val(x, radius), j_val(y, radius)]
@@ -41,9 +41,9 @@ def inside_bounds(pt):
     print(pt)
 
 
-width = 50
-height = 50
-points = create_points(width, height, 4)
+width = 10
+height = 10
+points = create_points(width, height, 2)
 
 #voronoi = Voronoi(points, qhull_options='Qbb Qc Qz')
 voronoi = loyds_algorithm(points, 1)
